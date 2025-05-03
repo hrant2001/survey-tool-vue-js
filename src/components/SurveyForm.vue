@@ -1,55 +1,66 @@
 <template>
-    <form @submit.prevent="submitSurvey">
-      <div v-for="(question, index) in questions" :key="index" class="question-block">
-        <p>{{ question.text }}</p>
-        <div class="likert">
-          <label v-for="rating in ratings" :key="rating.id">
-            <input
-              type="radio"
-              :name="'q' + index"
-              :value="rating.id"
-              v-model="answers[index]"
-              required
-            />
-            {{ rating.label }}
-          </label>
+    <div v-if="survey">
+      <h2>{{ survey.title }}</h2>
+  
+      <form @submit.prevent="submitSurvey">
+        <div v-for="(question, index) in survey.questions" :key="question.id" class="question-block">
+          <p>{{ question.text }}</p>
+          <div class="likert">
+            <label v-for="rating in ratings" :key="rating.id">
+              <input
+                type="radio"
+                :name="'q' + index"
+                :value="rating.id"
+                v-model="answers[index]"
+                required
+              />
+              {{ rating.label }}
+            </label>
+          </div>
         </div>
-      </div>
-      <button type="submit">Submit</button>
-    </form>
+        <button type="submit">Submit</button>
+      </form>
+    </div>
+    <div v-else>
+      <p>Loading survey...</p>
+    </div>
   </template>
   
   <script setup>
   import { ref, onMounted } from 'vue'
+  import { useRoute } from 'vue-router'
   import api from '../axios'
   
-  const questions = ref([
-    { id: 1, text: 'The survey was clear and easy to follow.' },
-    { id: 2, text: 'The content was relevant to me.' },
-    { id: 3, text: 'I would recommend this survey to others.' },
-    { id: 4, text: 'I found the interface user-friendly.' },
-    { id: 5, text: 'I was able to complete the survey quickly.' },
-  ])
+  const route = useRoute()
+  const surveyId = route.params.id
   
+  const survey = ref(null)
   const ratings = ref([])
-  const answers = ref(Array(questions.value.length).fill(null))
+  const answers = ref([])
   
   onMounted(async () => {
     try {
-      const res = await api.get('/ratings')
-      ratings.value = res.data
+      const [surveyRes, ratingsRes] = await Promise.all([
+        api.get(`/surveys/${surveyId}`),
+        api.get('/ratings')
+      ])
+  
+      survey.value = surveyRes.data
+      ratings.value = ratingsRes.data
+      answers.value = Array(survey.value.questions.length).fill(null)
     } catch (err) {
-      console.error('Failed to load ratings:', err)
+      console.error('Error loading survey or ratings', err)
     }
   })
   
   const submitSurvey = async () => {
     try {
-      const payload = questions.value.map((q, i) => ({
+      const payload = survey.value.questions.map((q, i) => ({
         questionId: q.id,
         ratingId: answers.value[i],
       }))
-      await api.post('/surveys/1/responses', payload)
+  
+      await api.post(`/surveys/${surveyId}/responses`, payload)
       alert('Thank you for your feedback!')
     } catch (error) {
       console.error('Failed to submit survey', error)
@@ -67,5 +78,4 @@
     gap: 10px;
     flex-wrap: wrap;
   }
-  </style>
-  
+  </style>  
